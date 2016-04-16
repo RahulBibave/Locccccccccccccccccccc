@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
-//import android.location.LocationListener;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -38,7 +37,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected GoogleApiClient mGoogleApiClient;
     protected LocationRequest mLocationRequest;
     protected Location mCurrentLocation;
+    protected LatLng lastLoc;
     protected TextView mLatLngText;
+    SharedPreferences lastLocation;
+
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
@@ -52,6 +54,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             UPDATE_INTERVAL_IN_MILLISECONDS / 2;
 
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,21 +64,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         find_.setOnClickListener(this);
 
-/*        SharedPreferences set = getSharedPreferences(preference, Context.MODE_PRIVATE);
-        SharedPreferences.Editor edit = set.edit();
-        edit.putString("NAME", "Nasif");
-        edit.commit();
-
-        //SharedPreferences set1 = getSharedPreferences(preference, Context.MODE_PRIVATE);
-        String name = set.getString("NAME", "Tom");
-        Log.d("DEBUGSTR", name);*/
-
         mLatLngText = (TextView) findViewById(R.id.textLatLng);
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        lastLocation = getSharedPreferences(preference, Context.MODE_PRIVATE);
 
         buildGoogleApiClient();
 
@@ -110,6 +106,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (mGoogleApiClient.isConnected()) {
             startLocationUpdates();
         }
+
+        double lat = Double.longBitsToDouble(lastLocation.getLong("Lat", 0));
+        double lng = Double.longBitsToDouble(lastLocation.getLong("Lng", 0));
+
+        if (lat != 0 && lng != 0){
+            lastLoc = new LatLng(lat, lng);
+
+            if (mMap != null) {
+                mMap.addMarker(new MarkerOptions().position(lastLoc));
+                mMap.moveCamera(CameraUpdateFactory.newLatLng(lastLoc));
+            }
+        }
+
+        Log.d("debug", "Lat: " + lat + " Long: " + lng);
+
     }
 
     @Override
@@ -119,6 +130,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (mGoogleApiClient.isConnected()) {
             stopLocationUpdates();
         }
+
+        if (mCurrentLocation != null) {
+            SharedPreferences.Editor edit = lastLocation.edit();
+            edit.putLong("Lat", Double.doubleToRawLongBits(mCurrentLocation.getLatitude()));
+            edit.putLong("Lng", Double.doubleToRawLongBits(mCurrentLocation.getLongitude()));
+            edit.commit();
+        }
+
+        //SharedPreferences set1 = getSharedPreferences(preference, Context.MODE_PRIVATE);
+
+
+
+
     }
 
     protected void stopLocationUpdates() {
@@ -174,9 +198,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mMap = googleMap;
 
         // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(-34, 151);
+/*        LatLng sydney = new LatLng(-34, 151);
         mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));*/
+
+        if (lastLoc != null) {
+            mMap.addMarker(new MarkerOptions().position(lastLoc));
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(lastLoc));
+        }
 
     }
 
@@ -200,12 +229,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (mCurrentLocation != null) {
             lat = mCurrentLocation.getLatitude();
             lng = mCurrentLocation.getLongitude();
-            LatLng lastLoc = new LatLng(lat, lng);
+//            LatLng currentLoc = new LatLng(lat, lng);
+//            mMap.addMarker(new MarkerOptions().position(currentLoc));
+//            mMap.moveCamera(CameraUpdateFactory.newLatLng(currentLoc));
 
-            mMap.addMarker(new MarkerOptions().position(lastLoc));
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(lastLoc));
-
-            mLatLngText.setText("Lat: " + String.valueOf(mCurrentLocation.getLatitude() + "\nLng: " + String.valueOf(mCurrentLocation.getLongitude())));
+            mLatLngText.setText("Lat: " + lat + "\nLng: " + lng);
         }
 
         startLocationUpdates();
@@ -305,7 +333,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.d("debug", "location changed");
+        //Log.d("debug", "location changed");
         mCurrentLocation = location;
         mLatLngText.setText("Lat: " + String.valueOf(mCurrentLocation.getLatitude() + "\nLng: " + String.valueOf(mCurrentLocation.getLongitude())));
 
