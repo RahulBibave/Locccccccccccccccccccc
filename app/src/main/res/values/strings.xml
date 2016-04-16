@@ -3,4 +3,6 @@
     <string name="action_settings">Settings</string>
     <string name="title_activity_maps">Map</string>
     <string name="editTextLocation">Enter Location</string>
+
+
 </resources>
