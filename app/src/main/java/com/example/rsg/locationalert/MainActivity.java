@@ -2,6 +2,7 @@ package com.example.rsg.locationalert;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
@@ -15,12 +16,18 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.Places;
+import com.google.android.gms.location.places.ui.PlacePicker;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -39,8 +46,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected Location mCurrentLocation;
     protected LatLng lastLoc;
     protected TextView mLatLngText;
-    SharedPreferences lastLocation;
-
+    protected SharedPreferences lastLocation;
+    protected int PLACE_PICKER_REQUEST = 1;
+    private Place place;
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
@@ -83,17 +91,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * LocationServices API.
      */
     protected synchronized void buildGoogleApiClient() {
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(LocationServices.API)
+        mGoogleApiClient = new GoogleApiClient
+                .Builder(this)
+                .addApi(Places.GEO_DATA_API)
+                .addApi(Places.PLACE_DETECTION_API)
+                .enableAutoManage(this, this)
                 .build();
         createLocationRequest();
     }
 
     protected void onStart() {
-        mGoogleApiClient.connect();
         super.onStart();
+        mGoogleApiClient.connect();
     }
 
     @Override
@@ -146,19 +155,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     protected void stopLocationUpdates() {
-        // It is a good practice to remove location requests when the activity is in a paused or
-        // stopped state. Doing so helps battery performance and is especially
-        // recommended in applications that request frequent location updates.
-
-        // The final argument to {@code requestLocationUpdates()} is a LocationListener
-        // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
-        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+//         It is a good practice to remove location requests when the activity is in a paused or
+//         stopped state. Doing so helps battery performance and is especially
+//         recommended in applications that request frequent location updates.
+//
+//         The final argument to {@code requestLocationUpdates()} is a LocationListener
+//         (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
+//        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
     }
 
 
     protected void onStop() {
-        mGoogleApiClient.disconnect();
         super.onStop();
+        mGoogleApiClient.disconnect();
     }
 
     @Override
@@ -188,10 +197,34 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         int id = v.getId();
         switch (id) {
             case (R.id.buttonFind):
-                break;
+                PlacePicker.IntentBuilder builder = new PlacePicker.IntentBuilder();
 
+                try {
+                    startActivityForResult(builder.build(this), PLACE_PICKER_REQUEST);
+                } catch (GooglePlayServicesRepairableException e) {
+
+                    Log.d("Place picker: " , e.toString());
+                } catch (GooglePlayServicesNotAvailableException e) {
+                    Log.d("Place picker: " , e.toString());
+                }
+                break;
         }
     }
+
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PLACE_PICKER_REQUEST) {
+            if (resultCode == RESULT_OK) {
+                //set the new place
+                place = PlacePicker.getPlace(this, data);
+                String toastMsg = String.format("Place: %s", place.getName());
+                Toast.makeText(this, toastMsg, Toast.LENGTH_LONG).show();
+                //add a marker at the location of the new place
+                mMap.addMarker(new MarkerOptions().position(place.getLatLng()));
+            }
+        }
+    }
+
+
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -203,8 +236,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));*/
 
         if (lastLoc != null) {
+            //add a marker to the current position
             mMap.addMarker(new MarkerOptions().position(lastLoc));
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(lastLoc));
+
+            //zoom in and reposition the camera to the marker at the same time
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(lastLoc, 12.0f));
         }
 
     }
@@ -212,7 +248,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onConnected(Bundle connectionHint) {
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this,
+                        Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
 
@@ -245,20 +284,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * Requests location updates from the FusedLocationApi.
      */
     protected void startLocationUpdates() {
-        // The final argument to {@code requestLocationUpdates()} is a LocationListener
-        // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        LocationServices.FusedLocationApi.requestLocationUpdates(
-                mGoogleApiClient, mLocationRequest, this);
+//        // The final argument to {@code requestLocationUpdates()} is a LocationListener
+//        // (http://developer.android.com/reference/com/google/android/gms/location/LocationListener.html).
+//        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//            // TODO: Consider calling
+//            //    ActivityCompat#requestPermissions
+//            // here to request the missing permissions, and then overriding
+//            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+//            //                                          int[] grantResults)
+//            // to handle the case where the user grants the permission. See the documentation
+//            // for ActivityCompat#requestPermissions for more details.
+//            return;
+//        }
+//        LocationServices.FusedLocationApi.requestLocationUpdates(
+//                mGoogleApiClient, mLocationRequest, this);
 
     }
 
@@ -305,19 +344,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
      * updates.
      */
     protected void createLocationRequest() {
-        mLocationRequest = new LocationRequest();
-
-        // Sets the desired interval for active location updates. This interval is
-        // inexact. You may not receive updates at all if no location sources are available, or
-        // you may receive them slower than requested. You may also receive updates faster than
-        // requested if other applications are requesting location at a faster interval.
-        mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
-
-        // Sets the fastest rate for active location updates. This interval is exact, and your
-        // application will never receive updates faster than this value.
-        mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
-
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+//        mLocationRequest = new LocationRequest();
+//
+//        // Sets the desired interval for active location updates. This interval is
+//        // inexact. You may not receive updates at all if no location sources are available, or
+//        // you may receive them slower than requested. You may also receive updates faster than
+//        // requested if other applications are requesting location at a faster interval.
+//        mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
+//
+//        // Sets the fastest rate for active location updates. This interval is exact, and your
+//        // application will never receive updates faster than this value.
+//        mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
+//
+//        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
 
     @Override
@@ -335,7 +374,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onLocationChanged(Location location) {
         //Log.d("debug", "location changed");
         mCurrentLocation = location;
-        mLatLngText.setText("Lat: " + String.valueOf(mCurrentLocation.getLatitude() + "\nLng: " + String.valueOf(mCurrentLocation.getLongitude())));
+        LatLng placeLoc = place.getLatLng();
+        float[] results = new float[1];
 
+        //calculate the distance and store it in results
+        Location.distanceBetween(placeLoc.latitude, placeLoc.longitude,
+                location.getLatitude(), location.getLongitude(), results);
+
+        //make a toast whenever the distance is <= 200
+        int distance = (int) results[0];
+        if(distance <= 1000) {
+            String toastMsg = String.format("Within 200meters of %s", place.getName());
+            Toast.makeText(this, toastMsg, Toast.LENGTH_LONG).show();
+        }
     }
 }
