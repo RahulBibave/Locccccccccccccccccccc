@@ -1,3 +1,16 @@
+/**
+ * This app takes a location and alerts you if you are within 200m of that place.
+ * It uses the Fused Location Api to get your current location, Places Api for selecting a point,
+ * and SharedPreferences for storing the last requested place.
+ *
+ * @version 4/27/16
+ * @authors Nasif Sikder <nasif1@umbc.edu>, Rob Grossman <rgross1@umbc.edu>
+ * @assignment CMSC 491 - Spring 2016 - Assignment 2
+
+ */
+
+
+
 package com.example.rsg.locationalert;
 
 import android.Manifest;
@@ -116,6 +129,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mGoogleApiClient.disconnect();
     }
 
+    /**
+     * Runs when a GoogleApiClient object successfully connects.
+     */
     @Override
     public void onConnected(Bundle connectionHint) {
 
@@ -139,9 +155,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (mCurrentLocation != null) {
             lat = mCurrentLocation.getLatitude();
             lng = mCurrentLocation.getLongitude();
-//            LatLng currentLoc = new LatLng(lat, lng);
-//            mMap.addMarker(new MarkerOptions().position(currentLoc));
-//            mMap.moveCamera(CameraUpdateFactory.newLatLng(currentLoc));
 
             mLatLngText.setText("Lat: " + lat + "\nLng: " + lng);
         }
@@ -150,12 +163,35 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
+
+
+    /**
+     * Stores the last requested place in SharedPreferences
+     */
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Stop location updates to save battery, but don't disconnect the GoogleApiClient object.
+        if (mGoogleApiClient.isConnected()) {
+            stopLocationUpdates();
+        }
+
+        if (place != null) {
+            SharedPreferences.Editor edit = lastLocation.edit();
+            edit.putLong("Lat", Double.doubleToRawLongBits(place.getLatLng().latitude));
+            edit.putLong("Lng", Double.doubleToRawLongBits(place.getLatLng().longitude));
+            edit.commit();
+        }
+
+    }
+
+
+    /**
+     * Retrieves that last requested place from SharedPreferences
+     */
     @Override
     public void onResume() {
         super.onResume();
-        // Within {@code onPause()}, we pause location updates, but leave the
-        // connection to GoogleApiClient intact.  Here, we resume receiving
-        // location updates if the user has requested them.
 
         if (mGoogleApiClient.isConnected()) {
             startLocationUpdates();
@@ -173,29 +209,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
 
-        Log.d("debug", "Lat: " + lat + " Long: " + lng);
-
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // Stop location updates to save battery, but don't disconnect the GoogleApiClient object.
-        if (mGoogleApiClient.isConnected()) {
-            stopLocationUpdates();
-        }
-
-        if (mCurrentLocation != null) {
-            SharedPreferences.Editor edit = lastLocation.edit();
-            edit.putLong("Lat", Double.doubleToRawLongBits(mCurrentLocation.getLatitude()));
-            edit.putLong("Lng", Double.doubleToRawLongBits(mCurrentLocation.getLongitude()));
-            edit.commit();
-        }
-
-        //SharedPreferences set1 = getSharedPreferences(preference, Context.MODE_PRIVATE);
-
-
-
+        //Log.d("debug", "Lat: " + lat + " Long: " + lng);
 
     }
 
@@ -238,6 +252,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Log.d("Connection failed: ", connectionResult.toString());
     }
 
+    /**
+     * Removes location updates from the FusedLocationApi.
+     */
     protected void stopLocationUpdates() {
 //         It is a good practice to remove location requests when the activity is in a paused or
 //         stopped state. Doing so helps battery performance and is especially
@@ -290,13 +307,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    /**
+     * Callback that's invoked when a location is selected from the Places activity.
+     * It sets the new place and adds a marker for the new location and zooms to it
+     */
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == PLACE_PICKER_REQUEST) {
             if (resultCode == RESULT_OK) {
                 //remove the previous marker before adding the new place
-                if(marker != null) {
-                    marker.remove();
-                }
+                    if(marker != null) {
+                        marker.remove();
+                    }
                 //set the new place
                 place = PlacePicker.getPlace(this, data);
                 String toastMsg = String.format("Place: %s", place.getName());
@@ -308,15 +329,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
-
+    /**
+     * Callback that fires when the Map is rendered. It adds a marker for the last place that you requested
+     * and zooms to it
+     */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
-        // Add a marker in Sydney and move the camera
-/*        LatLng sydney = new LatLng(-34, 151);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));*/
 
         if (lastLoc != null) {
             //add a marker to the current position
@@ -327,7 +346,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
 
     }
-
 
 
     /**
@@ -354,34 +372,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
-
-/*
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case 0: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-
-                    // permission was granted, yay! Do the
-                    // contacts-related task you need to do.
-
-                } else {
-
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-                }
-                return;
-            }
-
-            // other 'case' lines to check for other
-            // permissions this app might request
-        }
-    }
-*/
-
+    /**
+     * Callback that fires when the location changes. The new location's distance is compared with the
+     * requested location. If the distance is <= 200 meters, the user will be notified.
+     */
     @Override
     public void onLocationChanged(Location location) {
         //Log.d("debug", "location changed");
